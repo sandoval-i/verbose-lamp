@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="10dp"
+    tools:context=".LogInActivity">
+
+    <TextView
+        android:id="@+id/emailTV"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="20dp"
+        android:text="Correo"
+        android:textColor="@color/black" />
+
+    <EditText
+        android:id="@+id/emailET"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@id/emailTV" />
+
+    <TextView
+        android:id="@+id/passwordTV"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/emailTV"
+        android:layout_margin="20dp"
+        android:text="Contrasena"
+        android:textColor="@color/black" />
+
+    <EditText
+        android:id="@+id/passwordET"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/emailTV"
+        android:layout_toEndOf="@id/passwordTV"
+        android:inputType="textPassword" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/passwordET"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/loginButton"
+            style="@style/Widget.AppCompat.ButtonBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/passwordET"
+            android:layout_marginEnd="10dp"
+            android:layout_weight="0.5"
+            android:text="Autenticacion" />
+
+        <Button
+            android:id="@+id/registroButton"
+            style="@style/Widget.AppCompat.ButtonBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/passwordET"
+            android:layout_toEndOf="@id/loginButton"
+            android:layout_weight="0.5"
+            android:text="Registro" />
+    </LinearLayout>
+
+
+</RelativeLayout>
