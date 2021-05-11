@@ -4,7 +4,19 @@ import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.HashMap;
+
 public class Utils {
+    private static int cnt = 1;
+    private static HashMap<String, Integer> map = new HashMap<>();
+
+    public static int getNotificationId(String uid) {
+        if (!map.containsKey(uid)) {
+            map.put(uid, cnt++);
+        }
+        return map.get(uid);
+    }
+
     public static boolean validateEmail(String email) {
         Log.i("LOL", "valida " + email);
         Log.i("LOL", "@: " + !email.contains("@"));

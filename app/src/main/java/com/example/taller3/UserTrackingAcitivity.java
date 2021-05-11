@@ -7,13 +7,13 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Button;
+import android.widget.EditText;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.FragmentActivity;
+import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.taller3.databinding.ActivityCurrentLocationBinding;
+import com.example.taller3.databinding.ActivityUserTrackingAcitivityBinding;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.ResolvableApiException;
@@ -24,38 +24,66 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.SettingsClient;
-import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
-public class CurrentLocationActivity extends FragmentActivity implements OnMapReadyCallback {
+import org.jetbrains.annotations.NotNull;
+
+public class UserTrackingAcitivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private GoogleMap map;
-    private Button tomarLocalizacionButton;
-    private ActivityCurrentLocationBinding binding;
+    private ActivityUserTrackingAcitivityBinding binding;
 
     private final int LOCATION_PERMISSION_CODE = 1;
     private final int REQUEST_LOCATION_SETTINGS = 1;
     private LocationRequest locationRequest = null;
     private LocationCallback locationCallback = null;
     private FusedLocationProviderClient fusedLocationProviderClient = null;
-    private LatLng lastLocation = null;
+    private Marker ownMarkerLastLocation = null;
+    private Marker objectiveMarkerLastLocation = null;
+
+    private String objectiveUid;
+    private EditText distanciaEditText;
+
+    private final ValueEventListener eventListener = new ValueEventListener() {
+        @Override
+        public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
+            if (objectiveMarkerLastLocation != null) objectiveMarkerLastLocation.remove();
+            double latitud = Double.parseDouble(snapshot.child("latitud").getValue().toString());
+            double longitud = Double.parseDouble(snapshot.child("longitud").getValue().toString());
+            objectiveMarkerLastLocation = map.addMarker(new MarkerOptions()
+                    .position(new LatLng(latitud, longitud))
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET))
+                    .title(null));
+            updateDistance();
+        }
+
+        @Override
+        public void onCancelled(@NonNull @NotNull DatabaseError error) {
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        binding = ActivityCurrentLocationBinding.inflate(getLayoutInflater());
+        binding = ActivityUserTrackingAcitivityBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-        tomarLocalizacionButton = binding.getRoot().findViewById(R.id.tomarLocalizacionButton);
 
         locationRequest = new LocationRequest().setInterval(1000).setFastestInterval(500)
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
@@ -65,29 +93,23 @@ public class CurrentLocationActivity extends FragmentActivity implements OnMapRe
             public void onLocationResult(LocationResult locationResult) {
                 Location location = locationResult.getLastLocation();
                 if (location != null) {
-                    boolean moveCamera = lastLocation == null ||
-                            Utils.calculateDistance(lastLocation, new LatLng(location.getLatitude(), location.getLongitude())) >= 1.0;
-                    lastLocation = new LatLng(location.getLatitude(), location.getLongitude());
-                    map.clear();
-                    map.addMarker(new MarkerOptions().position(lastLocation).title(null));
-                    if (moveCamera) {
-                        map.moveCamera(CameraUpdateFactory.newLatLng(lastLocation));
-                    }
+                    if (ownMarkerLastLocation != null) ownMarkerLastLocation.remove();
+                    ownMarkerLastLocation = map.addMarker(new MarkerOptions()
+                            .position(new LatLng(location.getLatitude(), location.getLongitude())).title(null));
+                    updateDistance();
                 }
             }
         };
-        tomarLocalizacionButton.setOnClickListener(v -> {
-            Log.i("LOL", "Oprime boton para tomar localizacion y volver");
-            if (lastLocation != null) {
-                Intent intent = getIntent();
-                intent.putExtra("latitude", lastLocation.latitude);
-                intent.putExtra("longitude", lastLocation.longitude);
-                setResult(RESULT_OK, intent);
-            } else {
-                setResult(RESULT_CANCELED);
-            }
-            finish();
-        });
+
+        objectiveUid = getIntent().getStringExtra("uid");
+        distanciaEditText = findViewById(R.id.distanciaEditText);
+        Log.i("LOL", "Haciendo seguimiento a " + objectiveUid);
+
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Intent intent = new Intent(this, LogInActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -105,12 +127,13 @@ public class CurrentLocationActivity extends FragmentActivity implements OnMapRe
         SettingsClient client = LocationServices.getSettingsClient(this);
         client.checkLocationSettings(builder.build()).addOnSuccessListener(locationSettingsResponse -> {
             fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, null);
+            FirebaseDatabase.getInstance().getReference(PATHSDB.USERS).child(objectiveUid).addValueEventListener(eventListener);
         }).addOnFailureListener(e -> {
             int statusCode = ((ApiException) e).getStatusCode();
             if (statusCode == CommonStatusCodes.RESOLUTION_REQUIRED) {
                 try {
                     ((ResolvableApiException) e).
-                            startResolutionForResult(CurrentLocationActivity.this, REQUEST_LOCATION_SETTINGS);
+                            startResolutionForResult(UserTrackingAcitivity.this, REQUEST_LOCATION_SETTINGS);
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
@@ -118,8 +141,15 @@ public class CurrentLocationActivity extends FragmentActivity implements OnMapRe
         });
     }
 
+    @SuppressLint("SetTextI18n")
+    private void updateDistance() {
+        if (ownMarkerLastLocation == null || objectiveMarkerLastLocation == null) return;
+        distanciaEditText.setText(Utils.calculateDistance(ownMarkerLastLocation.getPosition(), objectiveMarkerLastLocation.getPosition()) + " KM");
+    }
+
     private void stopLocationUpdates() {
         fusedLocationProviderClient.removeLocationUpdates(locationCallback);
+        FirebaseDatabase.getInstance().getReference(PATHSDB.USERS).child(objectiveUid).removeEventListener(eventListener);
     }
 
     @Override

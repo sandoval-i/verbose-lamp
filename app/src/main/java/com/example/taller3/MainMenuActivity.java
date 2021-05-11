@@ -53,8 +53,11 @@ public class MainMenuActivity extends AppCompatActivity implements OnMapReadyCal
     private LocationCallback locationCallback = null;
     private FusedLocationProviderClient fusedLocationProviderClient = null;
     private Marker markerLastLocation = null;
+    private Menu menu;
 
-    private String LOCATIONS_PATH = "locationsArray";
+    private int disponible;
+    private final String[] DISPONIBLE_TEXT = {"Aparecer como disponible", "Aparecer como no disponible"};
+    private String uid;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,7 +71,7 @@ public class MainMenuActivity extends AppCompatActivity implements OnMapReadyCal
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        locationRequest = new LocationRequest().setInterval(1000).setFastestInterval(500)
+        locationRequest = new LocationRequest().setInterval(2000).setFastestInterval(1000)
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
         locationCallback = new LocationCallback() {
@@ -83,9 +86,27 @@ public class MainMenuActivity extends AppCompatActivity implements OnMapReadyCal
                             .position(new LatLng(location.getLatitude(), location.getLongitude())).title(null));
                     if (moveCamera)
                         map.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(location.getLatitude(), location.getLongitude())));
+                    FirebaseDatabase.getInstance().getReference(PATHSDB.USERS).child(uid).child("latitud").setValue(location.getLatitude());
+                    FirebaseDatabase.getInstance().getReference(PATHSDB.USERS).child(uid).child("longitud").setValue(location.getLongitude());
                 }
             }
         };
+        Log.i("LOL", "onCreate");
+        uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        FirebaseDatabase.getInstance().getReference(PATHSDB.USERS).child(uid).child("disponible").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
+                disponible = Integer.parseInt(snapshot.getValue().toString());
+                Log.i("LOL", "En teoria1 el disponible es: " + snapshot.toString());
+                Log.i("LOL", "En teoria2 el disponible es: " + snapshot.getValue());
+                Log.i("LOL", "En teoria3 el disponible es: " + disponible);
+                updateDisponibleText();
+            }
+
+            @Override
+            public void onCancelled(@NonNull @NotNull DatabaseError error) {
+            }
+        });
     }
 
     @SuppressLint("MissingPermission")
@@ -151,11 +172,24 @@ public class MainMenuActivity extends AppCompatActivity implements OnMapReadyCal
         }
     }
 
+    private void updateDisponibleText() {
+        if (menu == null) return;
+        Log.i("LOL", "El disponible que tengo es " + disponible);
+        Log.i("LOL", "El texto que muestra deberia ser " + DISPONIBLE_TEXT[disponible]);
+        menu.getItem(1).setTitle(DISPONIBLE_TEXT[disponible]);
+    }
+
+    private void updateDisponibleField() {
+        FirebaseDatabase.getInstance().getReference(PATHSDB.USERS).child(uid).child("disponible").setValue(disponible);
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         Log.i("LOL", "onCreateOptionsMenu");
         MenuInflater menuInflater = getMenuInflater();
         menuInflater.inflate(R.menu.options_menu, menu);
+
+        this.menu = menu;
         return true;
     }
 
@@ -166,15 +200,17 @@ public class MainMenuActivity extends AppCompatActivity implements OnMapReadyCal
             FirebaseAuth.getInstance().signOut();
             finish();
         } else if (itemId == R.id.aparecerDisponibleItem) {
-
-        } else if (false) {
-
+            disponible = 1-disponible;
+            updateDisponibleField();
+            updateDisponibleText();
+        } else if (itemId == R.id.listarUsuariosItem) {
+            startActivity(new Intent(this, UserListActivity.class));
         }
         return true;
     }
 
     private void loadLocationsFromDatabase() {
-        DatabaseReference ref = FirebaseDatabase.getInstance().getReference(LOCATIONS_PATH);
+        DatabaseReference ref = FirebaseDatabase.getInstance().getReference(PATHSDB.LOCATIONS);
         ref.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {

@@ -15,9 +15,13 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.storage.FirebaseStorage;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
 public class SignUpActivity extends AppCompatActivity {
@@ -33,13 +37,18 @@ public class SignUpActivity extends AppCompatActivity {
 
     private FirebaseAuth auth;
     private FirebaseDatabase database;
-    private final String PATH_USERS = "users";
+    private FirebaseStorage storage;
 
     private final int GALLERY_CODE = 1;
     private final int CAMERA_CODE = 2;
     private final int IMAGE_PICKER_REQUEST = 3;
     private final int CAMERA_REQUEST = 4;
+    private final int LOCATION_REQUEST = 5;
+
     private Bitmap selectedImage = null;
+    private LatLng location = null;
+
+    private int writeCount = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,16 +86,18 @@ public class SignUpActivity extends AppCompatActivity {
                 startActivityForResult(intent, CAMERA_REQUEST);
             }
         });
-        addLocationButton.setOnClickListener(v -> startActivity(new Intent(this,
-                CurrentLocationActivity.class)));
+        addLocationButton.setOnClickListener(v -> startActivityForResult(
+                new Intent(this, CurrentLocationActivity.class), LOCATION_REQUEST));
 
         auth = FirebaseAuth.getInstance();
         database = FirebaseDatabase.getInstance();
+        storage = FirebaseStorage.getInstance();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        Log.i("LOL", "onActivityResult, " + requestCode + ", " + resultCode);
         if (resultCode != RESULT_OK) return;
         try {
             if (requestCode == IMAGE_PICKER_REQUEST) {
@@ -96,9 +107,20 @@ public class SignUpActivity extends AppCompatActivity {
                 imageStream.close();
             } else if (requestCode == CAMERA_REQUEST) {
                 selectedImage = (Bitmap) data.getExtras().get("data");
+            } else if (requestCode == LOCATION_REQUEST) {
+                double latitude = data.getDoubleExtra("latitude", 0);
+                double longitude = data.getDoubleExtra("longitude", 0);
+                location = new LatLng(latitude, longitude);
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void successWrite() {
+        writeCount++;
+        if (writeCount == 2) {
+            finish();
         }
     }
 
@@ -118,24 +140,38 @@ public class SignUpActivity extends AppCompatActivity {
             Toast.makeText(this, "Campos invalidos", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (selectedImage == null) {
+            Toast.makeText(this, "Falta agregar foto", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (location == null) {
+            Toast.makeText(this, "Falta agregar localizacion", Toast.LENGTH_SHORT).show();
+            return;
+        }
         UserPojo user = new UserPojo();
         user.setNombre(nombre);
         user.setApellido(apellido);
         user.setEmail(email);
         user.setNumeroIdentificacion(numeroIdentificacion);
+        user.setLatitud(location.latitude);
+        user.setLongitud(location.longitude);
+        user.setDisponible(0);
         Log.i("LOL", "Crear usuario:success");
         auth.createUserWithEmailAndPassword(email, password).addOnCompleteListener(task -> {
             if (task.isSuccessful()) {
+                String uid = auth.getCurrentUser().getUid();
+                user.setUid(uid);
+
+                Log.i("LOL", "Registra al usuario con UID: " + uid);
+                Log.i("LOL", user.toString());
+                database.getReference(PATHSDB.USERS).child(uid).setValue(user).addOnSuccessListener(unused -> successWrite());
+
+                // Sube la imagen.
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                selectedImage.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
+                storage.getReference(PATHSDB.IMAGES).child(uid).putBytes(byteArrayOutputStream.toByteArray()).addOnSuccessListener(unused -> successWrite());
+
                 Toast.makeText(this, "Registro exitoso", Toast.LENGTH_SHORT).show();
-                Log.i("LOL", "Escribiendo al UID: " + auth.getCurrentUser().getUid());
-                database.getReference(PATH_USERS).child(auth.getCurrentUser().getUid()).setValue(user);
-                auth.signOut();
-                if (auth.getCurrentUser() != null) {
-                    Log.i("LOL", "Todo esta mal");
-                } else {
-                    Log.i("LOL", "Todo bien");
-                }
-                finish();
             } else {
                 Toast.makeText(this, "Registro fallido. Intente de nuevo", Toast.LENGTH_SHORT).show();
             }

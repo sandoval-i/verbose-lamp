@@ -2,4 +2,5 @@
     <string name="app_name">taller3</string>
     <string name="title_activity_current_location">Map</string>
     <string name="title_activity_main_menu">Map</string>
+    <string name="title_activity_user_tracking_acitivity">Map</string>
 </resources>
